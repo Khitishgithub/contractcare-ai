@@ -1,5 +1,4 @@
-// pages/api/getSummarizedText.js
-// pages/api/getSummarizedText.js
+
 import { NextResponse } from "next/server";
 
 import dbConnect from "../../utils/dbConnect";
@@ -9,7 +8,7 @@ export async function GET(req) {
   await dbConnect();
 
   try {
-    const contracts = await Contract.find().sort({ createdAt: -1 }).limit(1); // Fetch the most recent contract
+    const contracts = await Contract.find().sort({ createdAt: -1 }).limit(1); 
 
     if (contracts.length === 0) {
       return NextResponse.json({ success: false, message: "No contracts found" }, { status: 404 });

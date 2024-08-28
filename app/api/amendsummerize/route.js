@@ -1,4 +1,4 @@
-// pages/api/summarize-amendment.js
+
 import { NextResponse } from 'next/server';
 import dbConnect from "../../utils/dbConnect";
 import Contract from "../../models/Contract";
@@ -10,7 +10,7 @@ export async function POST(req) {
   try {
     const { text } = await req.json();
 
-    // Fetch the most recent contract summary
+   
     await dbConnect();
     const latestContract = await Contract.findOne().sort({ createdAt: -1 });
 
