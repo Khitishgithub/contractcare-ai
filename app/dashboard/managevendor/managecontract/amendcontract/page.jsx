@@ -1,159 +1,135 @@
-// "use client";
-// import React, { useState } from 'react';
-// import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-// import { Box, Typography, Button, Paper, CircularProgress } from '@mui/material';
+// pages/displaySummary.js
+"use client"
+import React, { useEffect, useState } from "react";
+import { Box, Typography, Paper, CircularProgress, Button, Input } from "@mui/material";
+import * as pdfjsLib from "pdfjs-dist/build/pdf";
+import "pdfjs-dist/web/pdf_viewer.css";
 
-// pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Set up the worker source
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-// const InvoiceUpload = () => {
-//   const [invoiceDetails, setInvoiceDetails] = useState(null);
-//   const [pagesText, setPagesText] = useState([]);
-//   const [isLoading, setIsLoading] = useState(false);
+const DisplaySummary = () => {
+  const [summary, setSummary] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [file, setFile] = useState(null);
+  const [responseMessage, setResponseMessage] = useState("");
 
-//   const processInvoiceText = async (text) => {
-//     try {
-//       const res = await fetch('/api/summarize', {
-//         method: 'POST',
-//         body: JSON.stringify({ text, invoiceNumber: '1' }), // Assuming invoice number is '1'
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//       });
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const res = await fetch("/api/getSummarizedText");
 
-//       if (!res.ok) {
-//         throw new Error(`API Error: ${res.statusText}`);
-//       }
+        if (!res.ok) {
+          throw new Error(`API Error: ${res.statusText}`);
+        }
 
-//       const data = await res.json();
-//       setInvoiceDetails(data);
-//     } catch (error) {
-//       console.error('Error processing invoice text:', error);
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
+        const data = await res.json();
+        if (data.success) {
+          setSummary(data.summarizedText);
+        } else {
+          console.error("Failed to fetch summarized text:", data.message);
+        }
+      } catch (error) {
+        console.error("Error fetching summarized text:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-//   const onLoadFile = function () {
-//     const typedarray = new Uint8Array(this.result);
-//     let allText = '';
+    fetchSummary();
+  }, []);
 
-//     pdfjsLib.getDocument({ data: typedarray }).promise.then((pdf) => {
-//       let pagePromises = [];
+  const extractTextFromPDF = async (file) => {
+    const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+    const numPages = pdf.numPages;
+    let text = "";
 
-//       for (let i = 1; i <= pdf.numPages; i++) {
-//         pagePromises.push(
-//           pdf.getPage(i).then((page) =>
-//             page.getTextContent().then((textContent) => {
-//               let pageText = textContent.items.map((item) => item.str).join(' ');
-//               allText += pageText + '\n';
-//               return pageText;
-//             })
-//           )
-//         );
-//       }
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      text += strings.join(" ");
+    }
 
-//       Promise.all(pagePromises).then(() => {
-//         setPagesText(allText.split('\n'));
-//         setIsLoading(true);
-//         processInvoiceText(allText);
-//       });
-//     });
-//   };
+    return text;
+  };
 
-//   const onChangeFileInput = (event) => {
-//     const file = event.target.files[0];
-//     if (file.type !== 'application/pdf') {
-//       console.error(file.name, 'is not a PDF file.');
-//       return;
-//     }
+  const handleFileChange = (event) => {
+    setFile(event.target.files[0]);
+  };
 
-//     const fileReader = new FileReader();
-//     fileReader.onload = onLoadFile;
-//     fileReader.readAsArrayBuffer(file);
-//   };
+  const handleFileUpload = async () => {
+    if (!file) return;
 
-//   return (
-//     <Box sx={{ padding: 4 }}>
-//       <Typography variant="h4" gutterBottom>
-//         Upload Invoice
-//       </Typography>
-//       <input
-//         id="file-input"
-//         type="file"
-//         onChange={onChangeFileInput}
-//         style={{ display: 'none' }}
-//       />
-//       <label htmlFor="file-input">
-//         <Button
-//           variant="contained"
-//           color="primary"
-//           component="span"
-//           sx={{ mb: 3 }}
-//         >
-//           Upload Invoice PDF
-//         </Button>
-//       </label>
+    setIsLoading(true);
+    setResponseMessage(""); 
+    try {
+      const pdfText = await extractTextFromPDF(file);
 
-//       {isLoading && (
-//         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-//           <CircularProgress />
-//         </Box>
-//       )}
+      const combinedText = `${summary}\n\n${pdfText}`;
 
-//       <Box>
-//         <Typography variant="h6" gutterBottom>
-//           Raw Text
-//         </Typography>
-//         <Paper elevation={3} sx={{ padding: 2, mb: 3 }}>
-//           {pagesText.map((pageText, index) => (
-//             <Box key={index} sx={{ mb: 2 }}>
-//               <Typography variant="subtitle1">Page {index + 1}</Typography>
-//               <Typography
-//                 variant="body2"
-//                 sx={{ whiteSpace: 'pre-wrap', backgroundColor: '#f5f5f5', padding: 1, borderRadius: 1 }}
-//               >
-//                 {pageText}
-//               </Typography>
-//             </Box>
-//           ))}
-//         </Paper>
-//       </Box>
+      const res = await fetch("/api/amendsummerize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: combinedText, type: "amendContract" }),
+      });
 
-//       {invoiceDetails && (
-//         <Box>
-//           <Typography variant="h6" gutterBottom>
-//             Combined Invoice and Contract Details
-//           </Typography>
-//           <Paper elevation={3} sx={{ padding: 2 }}>
-//             <Box sx={{ whiteSpace: 'pre-wrap' }}>
-//               <Typography variant="body2">
-//                 <strong>Invoice Summary:</strong>
-//                 {invoiceDetails.contractSummary}
-//               </Typography>
-//               <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-//                 Original Contract Data
-//               </Typography>
-//               <Typography variant="body2">{JSON.stringify(invoiceDetails.originalContract, null, 2)}</Typography>
-//             </Box>
-//           </Paper>
-//         </Box>
-//       )}
-//     </Box>
-//   );
-// };
+      if (!res.ok) {
+        throw new Error(`API Error: ${res.statusText}`);
+      }
 
-// export default InvoiceUpload;
+      const data = await res.json();
+      if (data.message) {
+        setResponseMessage(data.message); // Store the API response in state
+      } else {
+        console.error("Failed to process amended contract:", data.error);
+        setResponseMessage("Failed to process amended contract.");
+      }
+    } catch (error) {
+      console.error("Error processing amended contract:", error);
+      setResponseMessage("Error processing amended contract.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-import React from 'react';
-
-const AmendContract = () => {
   return (
-    <div>
-      <h1>Amend Contract</h1>
-      
-    </div>
+    <Box sx={{ padding: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        Summarized Text
+      </Typography>
+      <Paper elevation={3} sx={{ padding: 2 }}>
+        {isLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+            {summary}
+          </Typography>
+        )}
+      </Paper>
+      <Box sx={{ marginTop: 4 }}>
+        <Typography variant="h6">Upload Amended Contract</Typography>
+        <Input type="file" accept=".pdf" onChange={handleFileChange} />
+        <Button variant="contained" color="primary" onClick={handleFileUpload} disabled={!file}>
+          Upload Amended Contract
+        </Button>
+      </Box>
+      {responseMessage && (
+        <Box sx={{ marginTop: 4 }}>
+          <Typography variant="h6">AI Response</Typography>
+          <Paper elevation={3} sx={{ padding: 2 }}>
+            <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+              {responseMessage}
+            </Typography>
+          </Paper>
+        </Box>
+      )}
+    </Box>
   );
-}
+};
 
-export default AmendContract;
-
+export default DisplaySummary;

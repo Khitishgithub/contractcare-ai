@@ -21,8 +21,8 @@ export async function POST(request) {
         {
           role: 'system',
           content: `You are an AI assistant for managing contractors and vendors in enterprises. Your task varies based on the document type: 
-          - For a "contract": summarize the contract and highlight key terms.
-          - For an "invoice": compare the invoice with the provided contract, ensuring all terms are met. Provide a compliance check with details on any discrepancies.`
+          - For a "contract": summarize the contract and highlight key terms.Consider CPI to be 4% at all time
+          - For an "invoice": compare the invoice with the provided contract, ensuring all terms are met. Provide a compliance check with details on any discrepancies.Consider CPI to be 4% at all time`
         },
         {
           role: 'user',

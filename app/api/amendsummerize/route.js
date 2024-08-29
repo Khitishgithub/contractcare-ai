@@ -1,55 +1,49 @@
+import OpenAI from 'openai';
 
-import { NextResponse } from 'next/server';
-import dbConnect from "../../utils/dbConnect";
-import Contract from "../../models/Contract";
-import { Client } from "@octoai/client";
+const openai = new OpenAI({
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+});
 
-const client = new Client(process.env.NEXT_PUBLIC_OCTO_CLIENT_TOKEN);
-
-export async function POST(req) {
+export async function POST(request) {
   try {
-    const { text } = await req.json();
+    const { text, type = "contract" } = await request.json();
 
-   
-    await dbConnect();
-    const latestContract = await Contract.findOne().sort({ createdAt: -1 });
-
-    if (!latestContract) {
-      throw new Error("No existing contract found.");
+    if (!text) {
+      return new Response(
+        JSON.stringify({ error: 'Text is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Summarize the amendment
-    const amendmentCompletion = await client.chat.completions.create({
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
       messages: [
         {
-          role: "system",
-          content: "You are a tool that summarizes text. This tool processes an amendment text and compares it with an existing contract summary. Combine both summaries into a new summary.",
+          role: 'system',
+          content: `You are an AI assistant for managing contractors and vendors in enterprises. Your task varies based on the document type: 
+          - For a "contract": summarize the contract and highlight key terms. 
+          - For an "amendContract": compare the amended contract with the original summary, highlight any changes, and summarize the amendments. Consider CPI to be 4% at all times.`
         },
         {
-          role: "assistant",
-          content: `text:\n${text}`,
-        },
+          role: 'user',
+          content: `Document type: ${type}. Text: ${text}`
+        }
       ],
-      model: "mixtral-8x7b-instruct-fp16",
-      presence_penalty: 0,
       temperature: 0.1,
-      top_p: 0.9,
+      top_p: 0.9
     });
 
-    const amendmentSummary = amendmentCompletion.choices[0].message.content;
+    const message = completion.choices[0]?.message?.content || 'No response generated';
 
-    // Create a new summary combining both the existing contract and the amendment
-    const combinedSummary = `${latestContract.summarizedText}\n\nAmendment:\n${amendmentSummary}`;
-
-    return new Response(JSON.stringify({ message: { content: combinedSummary } }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ message }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    console.error("Error in API handler:", error);
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    console.error('Error in API handler:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal Server Error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }
